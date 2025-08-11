@@ -1,0 +1,6 @@
+port: 8080
+data_dir: data
+allowed_extensions:
+  - .pdf
+  - .jpeg
+max_concurrent_tasks: 3

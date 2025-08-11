@@ -1,0 +1,17 @@
+{
+  "name": "Add Files to Task",
+  "method": "POST",
+  "url": "http://localhost:8080/api/v1/tasks/{task_id}/files",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": {
+    "urls": [
+      "https://i.pinimg.com/736x/81/8f/d0/818fd0c7b9b0ebca8c753828bcb0a71b.jpg",
+      "https://psv4.userapi.com/s/v1/d2/A2XhIypFjc4NjEOaROKSCZXC9_2HLKIh4pXZL_3WAO6i9OssY_eB0TLPTvmHz6KJry7P8avuqSt1-M_I8hHZJMANGP3HWTsNXWOjNMmsK6vUA9q2ySQ8yyCSFsvNDAM-cq8gnefQFcTa/Rannetriasovye_amfibii_Vostochnoy_Evropy.pdf",
+      "https://psv4.userapi.com/s/v1/d2/o_HuRDUxdMzM8saNariRuufcOk_rbiezPUbTrS7aOdg4USCkaOw2oUTQ7Alle6CDRlXUdhOIAdRkHRAMgEfPbB-dcm39D9vZaXckmTvjkX84S9f1bFl_8xOO8Qs0ck2JDNvLV7Mm8BkK/Kak_slushat_muzyku_Max_Bazhenov.pdf",
+      "https://i.pinimg.com/550x/d3/8a/5f/d38a5f3c184afc0d71350b8d26d99b65.jpg"
+    ]
+  },
+  "description": "Add files to an existing task. Replace {task_id} with actual task ID from step 1. Note: Only first 3 files will be processed due to limit."
+}

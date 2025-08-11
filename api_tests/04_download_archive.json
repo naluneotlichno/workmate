@@ -1,0 +1,7 @@
+{
+  "name": "Download Archive",
+  "method": "GET",
+  "url": "http://localhost:8080/api/v1/tasks/{task_id}/archive",
+  "headers": {},
+  "description": "Download the processed archive. Replace {task_id} with actual task ID. Only works when task status is 'ready'."
+}
