@@ -1,17 +1,27 @@
-Workmate — simple archive builder (no DB, no Docker)
+Workmate — простой сборщик архивов (без БД и без Docker)
 
-Overview
+Обзор
 
-- Embedded service that downloads up to 3 files per task (.pdf, .jpeg), zips them, and returns the archive link.
-- No external infra: in-memory state + JSON snapshots on disk.
-- Concurrency limit: up to 3 tasks processed in parallel.
+- Встроенный сервис, который скачивает до 3 файлов на задачу (.pdf, .jpeg), упаковывает их в zip и возвращает ссылку на архив.
+- Без внешней инфраструктуры: состояние в памяти + JSON-снимки на диске.
+- Ограничение параллелизма: одновременно обрабатывается до 3 задач.
 
-Run
+Запуск
 
-- make run
-- Server listens on :8080
+- make up — сборка + линтеры + тесты + запуск бинарника в фоне. Сервер слушает :8080
+- make down — корректная остановка и очистка бинарника
+- make clean — удаление артефактов сборки
+- make test — запуск тестов Go
+- make lint — форматирование (go fmt) и запуск линтеров (golangci-lint)
+- make build — сборка бинарника в `bin/workmate.exe`
 
-Config (optional config.yml)
+Предварительные требования
+
+- Go 1.22+
+- Make (на Windows работает через Git Bash)
+- golangci-lint (опционально): `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
+
+Конфигурация (опционально `config.yml`)
 
 ```yaml
 port: 8080
@@ -20,36 +30,51 @@ allowed_extensions: [".pdf", ".jpeg"]
 max_concurrent_tasks: 3
 ```
 
-Storage layout
+Структура хранилища
 
 ```
 data/
   tasks/
     <task_id>/
       status.json
-      archive.zip   # appears when ready
+      archive.zip   # появляется, когда архив готов
 ```
+
+Что изменили (housekeeping)
+
+- Полностью удалили комментарии из исходников Go (и в тестах, и в проде). Код чистый и минималистичный.
+- Обернули возвращаемые ошибки в `internal/task/manager.go` и `internal/task/store.go`, чтобы удовлетворить линтеры.
+- Временные утилиты для удаления комментариев убраны из репозитория.
+- После изменений все тесты и линтеры проходят успешно.
+
+Как запускать коротко (TL;DR)
+
+1. `make up` — всё поднимет и запустит. Потом:
+   - UI: открой `http://localhost:8080`
+   - API: см. раздел API ниже (curl examples)
+2. Остановить: `make down`
+3. Dev-loop: `make lint && make test && make build`
 
 API
 
 - POST /api/v1/tasks
 
   - 201 {"task_id":"...","status":"created"}
-  - 503 {"error":"server busy"}
+  - 503 {"error":"server busy"} (сервер занят, достигнут лимит параллелизма)
 
 - POST /api/v1/tasks/{id}/files
 
-  - body: {"urls":["https://.../a.pdf","https://.../b.jpeg","https://.../c.pdf"]}
-  - 200 task status JSON (includes files, and archive_url once ready)
+  - тело запроса: {"urls":["https://.../a.pdf","https://.../b.jpeg","https://.../c.pdf"]}
+  - 200 — JSON статуса задачи (содержит файлы, а когда архив готов — `archive_url`)
 
 - GET /api/v1/tasks/{id}
 
-  - 200 task status JSON
+  - 200 — JSON статуса задачи
 
 - GET /api/v1/tasks/{id}/archive
-  - 200 zip attachment if ready, else 400
+  - 200 — скачивание zip, если архив готов; иначе 400
 
-Curl examples
+Примеры curl
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/tasks
@@ -63,7 +88,7 @@ curl http://localhost:8080/api/v1/tasks/<id>
 curl -OJ http://localhost:8080/api/v1/tasks/<id>/archive
 ```
 
-Notes
+Примечания
 
-- On restart, tasks that were in_progress become failed; snapshots are reloaded into memory.
-- Partial failures do not block archive creation: failed files are marked, ok files are zipped.
+- При рестарте задачи со статусом `in_progress` помечаются как `failed`; снимки состояния загружаются обратно в память.
+- Частичные ошибки не блокируют создание архива: неуспешные файлы помечаются, успешные упаковываются в архив.
