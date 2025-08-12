@@ -12,7 +12,6 @@ import (
 	"workmate/internal/archive"
 	fileutil "workmate/internal/file"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -64,11 +63,13 @@ func (m *Manager) IsBusy() bool {
 }
 
 func (m *Manager) CreateTask() *Task {
-	newID := uuid.NewString()
+	// Use local date-time as human-friendly task ID. The format is file/URL-safe and includes milliseconds.
+	createdAt := time.Now()
+	newID := createdAt.Format("2006-01-02_15-04-05.000")
 	newTask := &Task{
 		ID:        newID,
 		Status:    StatusCreated,
-		CreatedAt: time.Now(),
+		CreatedAt: createdAt,
 		Files:     make([]FileRef, 0, MaxFilesPerTask),
 	}
 
