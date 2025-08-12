@@ -1,4 +1,4 @@
-package api
+package ui
 
 import (
 	"html/template"
@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"workmate/internal/back/task"
 )
 
 var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}}
@@ -43,7 +45,7 @@ var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}
   <footer>
     <div>API base: <span class="mono">/api/v1</span></div>
   </footer>
-</body>
+ </body>
 </html>
 {{end}}
 
@@ -120,7 +122,7 @@ var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}
   <footer>
     <div>API base: <span class="mono">/api/v1</span></div>
   </footer>
-</body>
+ </body>
 </html>
 {{end}}
 
@@ -210,6 +212,12 @@ var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}
     async function refreshTask() {
       try {
         const res = await fetch('/api/v1/tasks/' + encodeURIComponent(taskId), { headers: { 'Accept': 'application/json' } });
+        if (res.status === 404) {
+          if (statusEl) statusEl.textContent = 'not found';
+          setDownloadEnabled(false);
+          clearInterval(timerId);
+          return;
+        }
         if (!res.ok) return;
         const data = await res.json();
 
@@ -244,36 +252,49 @@ var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}
         const ready = data.status === 'ready' && !!data.archive_url;
         setDownloadEnabled(ready);
 
-        // Stop polling when terminal state reached
         if (data.status === 'ready' || data.status === 'failed') {
           clearInterval(timerId);
         }
       } catch (_) {
-        // Ignore network errors while polling
       }
     }
 
-    // Initial state
     setDownloadEnabled(false);
-    const timerId = setInterval(refreshTask, 1500);
+    let timerId = setInterval(refreshTask, 2000);
     refreshTask();
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        if (timerId) { clearInterval(timerId); timerId = null; }
+      } else {
+        if (!timerId) {
+          refreshTask();
+          timerId = setInterval(refreshTask, 2000);
+        }
+      }
+    });
   })();
   </script>
 {{end}}
 `))
 
-func (a *API) RegisterUIRoutes(router *gin.Engine) {
-	router.SetHTMLTemplate(uiTemplates)
-	router.GET("/", a.UIHome)
-	router.GET("/ui/tasks", a.UIOpenExisting)
-	router.POST("/ui/tasks", a.UICreateTask)
-	router.GET("/ui/tasks/:id", a.UITask)
-	router.POST("/ui/tasks/:id/files", a.UIAddFiles)
+type UI struct {
+	taskManager *task.Manager
 }
 
-func (a *API) UIHome(c *gin.Context) { c.HTML(http.StatusOK, "home", gin.H{}) }
+func NewUI(tm *task.Manager) *UI { return &UI{taskManager: tm} }
 
-func (a *API) UIOpenExisting(c *gin.Context) {
+func (u *UI) RegisterRoutes(router *gin.Engine) {
+	router.SetHTMLTemplate(uiTemplates)
+	router.GET("/", u.UIHome)
+	router.GET("/ui/tasks", u.UIOpenExisting)
+	router.POST("/ui/tasks", u.UICreateTask)
+	router.GET("/ui/tasks/:id", u.UITask)
+	router.POST("/ui/tasks/:id/files", u.UIAddFiles)
+}
+
+func (u *UI) UIHome(c *gin.Context) { c.HTML(http.StatusOK, "home", gin.H{}) }
+
+func (u *UI) UIOpenExisting(c *gin.Context) {
 	id := strings.TrimSpace(c.Query("id"))
 	if id == "" {
 		c.Redirect(http.StatusFound, "/")
@@ -282,39 +303,37 @@ func (a *API) UIOpenExisting(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/ui/tasks/"+id)
 }
 
-func (a *API) UICreateTask(c *gin.Context) {
-	if a.taskManager.IsBusy() {
+func (u *UI) UICreateTask(c *gin.Context) {
+	if u.taskManager.IsBusy() {
 		c.HTML(http.StatusServiceUnavailable, "home", gin.H{"Error": "server busy: try again later"})
 		return
 	}
-	t := a.taskManager.CreateTask()
+	t := u.taskManager.CreateTask()
 	c.Redirect(http.StatusFound, "/ui/tasks/"+t.ID)
 }
 
-func (a *API) UITask(c *gin.Context) {
+func (u *UI) UITask(c *gin.Context) {
 	id := c.Param("id")
-	if t, ok := a.taskManager.GetTask(id); ok {
+	if t, ok := u.taskManager.GetTask(id); ok {
 		c.HTML(http.StatusOK, "task", gin.H{"Task": t, "content": "content-task"})
-
 		return
 	}
 	c.HTML(http.StatusNotFound, "home", gin.H{"Error": "task not found"})
 }
 
-func (a *API) UIAddFiles(c *gin.Context) {
+func (u *UI) UIAddFiles(c *gin.Context) {
 	id := c.Param("id")
 	urls := c.PostFormArray("urls")
 	filtered := make([]string, 0, len(urls))
-	for _, u := range urls {
-		u = strings.TrimSpace(u)
-		if u != "" {
-			filtered = append(filtered, u)
+	for _, raw := range urls {
+		raw = strings.TrimSpace(raw)
+		if raw != "" {
+			filtered = append(filtered, raw)
 		}
 	}
 	if len(filtered) > 0 {
-		if _, err := a.taskManager.AddFiles(id, filtered); err != nil {
-
-			if t, ok := a.taskManager.GetTask(id); ok {
+		if _, err := u.taskManager.AddFiles(id, filtered); err != nil {
+			if t, ok := u.taskManager.GetTask(id); ok {
 				c.HTML(http.StatusBadRequest, "task", gin.H{"Task": t, "Error": err.Error()})
 				return
 			}

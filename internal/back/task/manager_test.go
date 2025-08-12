@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	archive "workmate/internal/archive"
+	archive "workmate/internal/back/archive"
 )
 
 func newTestManager(t *testing.T) *Manager {
@@ -66,7 +66,6 @@ func TestProcessingFlowReadyAndArchivePath(t *testing.T) {
 	m := newTestManager(t)
 
 	m.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
-
 		f, err := os.Create(dest)
 		if err != nil {
 			return nil, err
@@ -114,7 +113,6 @@ func TestIsBusyWhileProcessing(t *testing.T) {
 	blocker := make(chan struct{})
 	m.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
 		<-blocker
-
 		f, _ := os.Create(dest)
 		_ = f.Close()
 		r := make([]archive.Result, len(urls))

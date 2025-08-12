@@ -13,10 +13,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"workmate/internal/api"
-	"workmate/internal/config"
-	fileutil "workmate/internal/file"
-	"workmate/internal/task"
+	backapi "workmate/internal/back/api"
+	"workmate/internal/back/config"
+	fileutil "workmate/internal/back/file"
+	"workmate/internal/back/task"
+	frontui "workmate/internal/front/ui"
 )
 
 func main() {
@@ -67,7 +68,7 @@ func setupRouter() *gin.Engine {
 	r := gin.New()
 
 	r.Use(gin.Recovery())
-	r.Use(api.ZerologLogger())
+	r.Use(backapi.ZerologLogger())
 	return r
 }
 
@@ -83,10 +84,11 @@ func buildTaskManager(cfg config.Config) *task.Manager {
 }
 
 func wireAPI(router *gin.Engine, tm *task.Manager) {
-	apiHandler := api.NewAPI(tm)
-
-	apiHandler.RegisterUIRoutes(router)
+	apiHandler := backapi.NewAPI(tm)
 	apiHandler.RegisterRoutes(router)
+
+	uiHandler := frontui.NewUI(tm)
+	uiHandler.RegisterRoutes(router)
 }
 
 func newHTTPServer(port int, handler http.Handler, readHeaderTimeout time.Duration) *http.Server {

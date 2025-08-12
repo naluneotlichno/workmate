@@ -39,7 +39,6 @@ func WriteJSONAtomic(filename string, v any) error {
 
 	jsonEncoder := json.NewEncoder(tempFile)
 	jsonEncoder.SetEscapeHTML(true)
-	// Pretty-print JSON for human-friendly inspection on disk
 	jsonEncoder.SetIndent("", "  ")
 	if err := jsonEncoder.Encode(v); err != nil {
 		_ = tempFile.Close()
@@ -58,7 +57,6 @@ func WriteJSONAtomic(filename string, v any) error {
 	}
 
 	if _, err := os.Stat(filename); err == nil {
-
 		_ = os.Remove(filename)
 	}
 

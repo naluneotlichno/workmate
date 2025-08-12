@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 
-	"workmate/internal/task"
+	"workmate/internal/back/task"
 )
 
 type createTaskResponse struct {

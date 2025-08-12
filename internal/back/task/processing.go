@@ -4,8 +4,8 @@ import (
 	"context"
 	"path/filepath"
 
-	"workmate/internal/archive"
-	fileutil "workmate/internal/file"
+	"workmate/internal/back/archive"
+	fileutil "workmate/internal/back/file"
 
 	"github.com/rs/zerolog/log"
 )

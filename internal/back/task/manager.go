@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"workmate/internal/archive"
-	fileutil "workmate/internal/file"
+	"workmate/internal/back/archive"
+	fileutil "workmate/internal/back/file"
 
 	"github.com/rs/zerolog/log"
 )
@@ -63,11 +63,10 @@ func (m *Manager) IsBusy() bool {
 }
 
 func (m *Manager) CreateTask() *Task {
-    // Use local date-time as human-friendly task ID, seconds precision.
-    createdAt := time.Now()
-    baseID := createdAt.Format("2006-01-02_15-04-05")
-    newTask := &Task{
-        ID:        baseID,
+	createdAt := time.Now()
+	baseID := createdAt.Format("2006-01-02_15-04-05")
+	newTask := &Task{
+		ID:        baseID,
 		Status:    StatusCreated,
 		CreatedAt: createdAt,
 		Files:     make([]FileRef, 0, MaxFilesPerTask),
@@ -75,22 +74,21 @@ func (m *Manager) CreateTask() *Task {
 
 	m.updateTaskTitle(newTask)
 
-    m.mu.Lock()
-    // Ensure uniqueness if multiple tasks are created within the same second
-    finalID := baseID
-    if _, exists := m.tasks[finalID]; exists {
-        suffix := 1
-        for {
-            candidate := fmt.Sprintf("%s-%02d", baseID, suffix)
-            if _, ok := m.tasks[candidate]; !ok {
-                finalID = candidate
-                break
-            }
-            suffix++
-        }
-    }
-    newTask.ID = finalID
-    m.tasks[finalID] = newTask
+	m.mu.Lock()
+	finalID := baseID
+	if _, exists := m.tasks[finalID]; exists {
+		suffix := 1
+		for {
+			candidate := fmt.Sprintf("%s-%02d", baseID, suffix)
+			if _, ok := m.tasks[candidate]; !ok {
+				finalID = candidate
+				break
+			}
+			suffix++
+		}
+	}
+	newTask.ID = finalID
+	m.tasks[finalID] = newTask
 	m.mu.Unlock()
 
 	if err := m.persistTask(newTask); err != nil {

@@ -10,25 +10,26 @@ import (
 	"testing"
 	"time"
 
-	"workmate/internal/archive"
-	"workmate/internal/task"
+	"workmate/internal/back/archive"
+	"workmate/internal/back/task"
 
 	"context"
 
 	"github.com/gin-gonic/gin"
 )
 
-func setupRouter() *gin.Engine {
+func setupRouter(t *testing.T) *gin.Engine {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	testRouter := gin.Default()
-	testManager := task.NewManager()
+	testManager := task.NewManagerWithOptions(task.Options{DataDir: t.TempDir(), AllowedExtensions: []string{".pdf", ".jpeg"}, MaxConcurrentTasks: 3})
 	apiHandler := NewAPI(testManager)
 	apiHandler.RegisterRoutes(testRouter)
 	return testRouter
 }
 
 func TestCreateTask(t *testing.T) {
-	testRouter := setupRouter()
+	testRouter := setupRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
@@ -53,7 +54,7 @@ func TestCreateTask(t *testing.T) {
 }
 
 func TestAddFilesAndStatus(t *testing.T) {
-	testRouter := setupRouter()
+	testRouter := setupRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
@@ -81,7 +82,7 @@ func TestAddFilesAndStatus(t *testing.T) {
 func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	testRouter := gin.Default()
-	testManager := task.NewManager()
+	testManager := task.NewManagerWithOptions(task.Options{DataDir: t.TempDir(), AllowedExtensions: []string{".pdf", ".jpeg"}, MaxConcurrentTasks: 3})
 
 	testManager.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
 		results := make([]archive.Result, len(urls))
@@ -144,7 +145,7 @@ func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 }
 
 func TestInvalidExtension(t *testing.T) {
-	testRouter := setupRouter()
+	testRouter := setupRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
@@ -167,7 +168,7 @@ func TestInvalidExtension(t *testing.T) {
 }
 
 func TestTooManyFiles(t *testing.T) {
-	testRouter := setupRouter()
+	testRouter := setupRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
@@ -190,7 +191,7 @@ func TestTooManyFiles(t *testing.T) {
 }
 
 func TestGetTaskNotFound(t *testing.T) {
-	testRouter := setupRouter()
+	testRouter := setupRouter(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tasks/does-not-exist", nil)
 	w := httptest.NewRecorder()
 	testRouter.ServeHTTP(w, req)
@@ -200,7 +201,7 @@ func TestGetTaskNotFound(t *testing.T) {
 }
 
 func TestGetTaskOK(t *testing.T) {
-	testRouter := setupRouter()
+	testRouter := setupRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
@@ -230,7 +231,7 @@ func TestGetTaskOK(t *testing.T) {
 }
 
 func TestDownloadArchiveNotReady(t *testing.T) {
-	testRouter := setupRouter()
+	testRouter := setupRouter(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
@@ -253,10 +254,9 @@ func TestDownloadArchiveNotReady(t *testing.T) {
 func TestDownloadArchiveReady(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	testRouter := gin.Default()
-	testManager := task.NewManager()
+	testManager := task.NewManagerWithOptions(task.Options{DataDir: t.TempDir(), AllowedExtensions: []string{".pdf", ".jpeg"}, MaxConcurrentTasks: 3})
 
 	testManager.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
-
 		f, err := os.Create(dest)
 		if err != nil {
 			return nil, err
@@ -320,7 +320,7 @@ func TestServerBusyOnCreate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	testRouter := gin.Default()
 
-	testManager := task.NewManagerWithOptions(task.Options{DataDir: "data", AllowedExtensions: []string{".pdf", ".jpeg"}, MaxConcurrentTasks: 1})
+	testManager := task.NewManagerWithOptions(task.Options{DataDir: t.TempDir(), AllowedExtensions: []string{".pdf", ".jpeg"}, MaxConcurrentTasks: 1})
 
 	blocker := make(chan struct{})
 	testManager.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
