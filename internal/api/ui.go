@@ -135,27 +135,28 @@ var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}
   </div>
   {{end}}
   <div class="card">
-    <h2>Task <span class="mono">{{.Task.ID}}</span></h2>
+    <h2>Task <span class="mono" id="taskId">{{.Task.ID}}</span></h2>
     {{if .Task.Title}}
-    <div>Title: <strong>{{.Task.Title}}</strong></div>
+    <div>Title: <strong id="taskTitle">{{.Task.Title}}</strong></div>
     {{end}}
-    <div>Status: <span class="status">{{.Task.Status}}</span></div>
-    <div class="muted">Created at: {{.Task.CreatedAt}}</div>
+    <div>Status: <span class="status" id="taskStatus">{{.Task.Status}}</span></div>
+    <div class="muted">Created at: <span id="taskCreatedAt">{{.Task.CreatedAt}}</span></div>
   </div>
 
   <div class="card">
     <h3>Files</h3>
-    {{if .Task.Files}}
-      <ul class="list">
-      {{range .Task.Files}}
-        <li>
-          <div><span class="mono">{{.URL}}</span></div>
-          <div class="muted">{{.State}}{{if .Filename}} · {{.Filename}}{{end}}{{if .Error}} · error: {{.Error}}{{end}}</div>
-        </li>
+    <ul class="list" id="filesList">
+      {{if .Task.Files}}
+        {{range .Task.Files}}
+          <li>
+            <div><span class="mono">{{.URL}}</span></div>
+            <div class="muted">{{.State}}{{if .Filename}} · {{.Filename}}{{end}}{{if .Error}} · error: {{.Error}}{{end}}</div>
+          </li>
+        {{end}}
       {{end}}
-      </ul>
-    {{else}}
-      <div class="muted">No files yet</div>
+    </ul>
+    {{if not .Task.Files}}
+      <div class="muted" id="noFilesHint">No files yet</div>
     {{end}}
   </div>
 
@@ -177,11 +178,87 @@ var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}
   <div class="card">
     <h3>Archive</h3>
     <div>
-      <a class="btn" href="/api/v1/tasks/{{.Task.ID}}/archive">Download zip</a>
+      <a class="btn" id="downloadBtn" href="/api/v1/tasks/{{.Task.ID}}/archive">Download zip</a>
       <span class="muted" style="margin-left:8px">Link works when status is ready</span>
     </div>
     <div class="muted">GET /api/v1/tasks/{{.Task.ID}}/archive</div>
   </div>
+
+  <script>
+  (function() {
+    const taskId = document.getElementById('taskId').textContent;
+    const statusEl = document.getElementById('taskStatus');
+    const titleEl = document.getElementById('taskTitle');
+    const createdAtEl = document.getElementById('taskCreatedAt');
+    const filesListEl = document.getElementById('filesList');
+    const noFilesHintEl = document.getElementById('noFilesHint');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    function setDownloadEnabled(enabled) {
+      if (!downloadBtn) return;
+      if (enabled) {
+        downloadBtn.style.pointerEvents = 'auto';
+        downloadBtn.style.opacity = '1';
+        downloadBtn.setAttribute('aria-disabled', 'false');
+      } else {
+        downloadBtn.style.pointerEvents = 'none';
+        downloadBtn.style.opacity = '0.6';
+        downloadBtn.setAttribute('aria-disabled', 'true');
+      }
+    }
+
+    async function refreshTask() {
+      try {
+        const res = await fetch('/api/v1/tasks/' + encodeURIComponent(taskId), { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status && statusEl) statusEl.textContent = data.status;
+        if (data.title && titleEl) titleEl.textContent = data.title;
+        if (data.created_at && createdAtEl) createdAtEl.textContent = data.created_at;
+
+        if (Array.isArray(data.files) && filesListEl) {
+          filesListEl.innerHTML = '';
+          if (data.files.length === 0 && noFilesHintEl) {
+            noFilesHintEl.style.display = 'block';
+          } else if (noFilesHintEl) {
+            noFilesHintEl.style.display = 'none';
+          }
+          for (const f of data.files) {
+            const li = document.createElement('li');
+            const urlDiv = document.createElement('div');
+            urlDiv.innerHTML = '<span class="mono"></span>';
+            urlDiv.querySelector('span').textContent = f.url || '';
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'muted';
+            const parts = [f.state || ''];
+            if (f.filename) parts.push('· ' + f.filename);
+            if (f.error) parts.push('· error: ' + f.error);
+            metaDiv.textContent = parts.join(' ');
+            li.appendChild(urlDiv);
+            li.appendChild(metaDiv);
+            filesListEl.appendChild(li);
+          }
+        }
+
+        const ready = data.status === 'ready' && !!data.archive_url;
+        setDownloadEnabled(ready);
+
+        // Stop polling when terminal state reached
+        if (data.status === 'ready' || data.status === 'failed') {
+          clearInterval(timerId);
+        }
+      } catch (_) {
+        // Ignore network errors while polling
+      }
+    }
+
+    // Initial state
+    setDownloadEnabled(false);
+    const timerId = setInterval(refreshTask, 1500);
+    refreshTask();
+  })();
+  </script>
 {{end}}
 `))
 
