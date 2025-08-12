@@ -59,6 +59,8 @@ func main() {
 
 func setupRouter() *gin.Engine {
 	r := gin.New()
+	// Build API to register UI template before routes (Gin warns otherwise)
+	// UI template is set during UI route registration
 	r.Use(gin.Recovery())
 	r.Use(api.ZerologLogger())
 	return r
@@ -77,6 +79,8 @@ func buildTaskManager(cfg config.Config) *task.Manager {
 
 func wireAPI(router *gin.Engine, tm *task.Manager) {
 	apiHandler := api.NewAPI(tm)
+	// Register UI first to call SetHTMLTemplate before other routes
+	apiHandler.RegisterUIRoutes(router)
 	apiHandler.RegisterRoutes(router)
 }
 

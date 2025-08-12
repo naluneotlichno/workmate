@@ -28,7 +28,7 @@ func Default() Config {
 	return Config{
 		Port:               defaultPort,
 		DataDir:            defaultDataDir,
-		AllowedExtensions:  []string{".pdf", ".jpeg"},
+		AllowedExtensions:  []string{".pdf", ".jpeg", ".jpg"},
 		MaxConcurrentTasks: defaultMaxConcurrentTasks,
 	}
 }
@@ -70,7 +70,7 @@ func Load(path string) (Config, error) {
 
 func normalizeExtensions(in []string) []string {
 	if len(in) == 0 {
-		return []string{".pdf", ".jpeg"}
+		return []string{".pdf", ".jpeg", ".jpg"}
 	}
 	seen := make(map[string]struct{}, len(in))
 	normalized := make([]string, 0, len(in))

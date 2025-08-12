@@ -118,6 +118,14 @@ func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	// archive_url must be present immediately after adding 3 files
+	var addResp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &addResp); err != nil {
+		t.Fatalf("unmarshal addResp: %v", err)
+	}
+	if addResp["archive_url"] == nil || addResp["archive_url"].(string) == "" {
+		t.Fatalf("expected archive_url to be present when files count is 3")
+	}
 
 	// wait until background processing flips status to ready
 	deadline := time.Now().Add(2 * time.Second)

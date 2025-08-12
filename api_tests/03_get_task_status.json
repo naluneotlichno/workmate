@@ -1,7 +1,0 @@
-{
-  "name": "Get Task Status",
-  "method": "GET",
-  "url": "http://localhost:8080/api/v1/tasks/{task_id}",
-  "headers": {},
-  "description": "Get the current status of a task. Replace {task_id} with actual task ID."
-}

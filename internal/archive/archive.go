@@ -65,8 +65,24 @@ func BuildArchive(ctx context.Context, destZipPath string, urls []string) ([]Res
 	client := &http.Client{Timeout: httpTimeoutFromContext(ctx)}
 
 	results := make([]Result, len(urls))
+	usedNames := make(map[string]int, len(urls))
 	for i, rawURL := range urls {
-		results[i] = processURL(ctx, client, zipWriter, rawURL, i)
+		res := processURL(ctx, client, zipWriter, rawURL, i)
+		// Ensure unique filenames inside zip
+		if res.Filename != "" {
+			base := res.Filename
+			if count, ok := usedNames[base]; ok {
+				// increment and suffix
+				count++
+				usedNames[base] = count
+				ext := filepath.Ext(base)
+				name := strings.TrimSuffix(base, ext)
+				res.Filename = fmt.Sprintf("%s(%d)%s", name, count, ext)
+			} else {
+				usedNames[base] = 1
+			}
+		}
+		results[i] = res
 	}
 
 	if err := zipWriter.Close(); err != nil {
@@ -98,6 +114,10 @@ func processURL(ctx context.Context, client *http.Client, zipWriter *zip.Writer,
 	result := Result{Filename: filename}
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	// Set browser-like User-Agent to avoid blocking by some sites
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	// Some sites check Referer, so we set it to avoid blocking
+	req.Header.Set("Referer", "https://www.google.com/")
 	httpResponse, err := client.Do(req)
 	if err != nil {
 		result.Err = err.Error()

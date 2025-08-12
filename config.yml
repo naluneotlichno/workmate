@@ -3,4 +3,5 @@ data_dir: data
 allowed_extensions:
   - .pdf
   - .jpeg
+  - .jpg
 max_concurrent_tasks: 3

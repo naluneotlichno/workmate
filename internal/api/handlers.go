@@ -31,6 +31,8 @@ type API struct {
 	taskManager *task.Manager
 }
 
+const archiveURLFilesThreshold = 3
+
 func NewAPI(taskManager *task.Manager) *API {
 	return &API{taskManager: taskManager}
 }
@@ -118,7 +120,9 @@ func (a *API) toTaskResponse(taskEntity *task.Task, _ *gin.Context) taskResponse
 		CreatedAt: taskEntity.CreatedAt.UTC().Format(time.RFC3339),
 		Files:     taskEntity.Files,
 	}
-	if taskEntity.Status == task.StatusReady && taskEntity.ArchivePath != "" {
+	// Return archive link as soon as the task has 3 files, even if still processing.
+	// The link will become downloadable once status becomes ready.
+	if len(taskEntity.Files) >= archiveURLFilesThreshold {
 		resp.ArchiveURL = "/api/v1/tasks/" + taskEntity.ID + "/archive"
 	}
 	return resp
