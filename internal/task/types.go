@@ -34,6 +34,7 @@ type Task struct {
 	ID          string    `json:"id"`
 	Status      Status    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
+	Title       string    `json:"title"`
 	Files       []FileRef `json:"files"`
 	ArchivePath string    `json:"archive_path,omitempty"`
 }
@@ -46,6 +47,8 @@ type Options struct {
 }
 
 const (
-	maxFilesPerTask      = 3
+	// MaxFilesPerTask defines how many files are required to start processing
+	// and is used by API layer to expose when archive link should appear.
+	MaxFilesPerTask      = 3
 	defaultMaxConcurrent = 3
 )

@@ -1,0 +1,231 @@
+openapi: 3.1.0
+info:
+  title: Workmate API
+  version: 1.0.0
+  description: |
+    Simple API to create a task, attach up to 3 file URLs (.pdf, .jpeg/.jpg) and download a zip archive.
+    Task IDs are short lowercase hex (8 chars) by default.
+
+servers:
+  - url: http://localhost:{port}
+    description: Local server
+    variables:
+      port:
+        default: "8080"
+
+paths:
+  /api/v1/tasks:
+    post:
+      summary: Create a new task
+      description: Returns a new task identifier. If the service is at max concurrency, returns 503.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Empty object
+              example: {}
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTaskResponse'
+              examples:
+                example:
+                  value: { task_id: "4c75a864", status: created }
+        '503':
+          description: Server busy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                example:
+                  value: { error: "server busy" }
+
+  /api/v1/tasks/{id}/files:
+    post:
+      summary: Add file URLs to a task
+      description: |
+        Accepts up to 3 URLs per task. Allowed extensions are configured on the server (default: .pdf, .jpeg, .jpg).
+        When the task accumulates 3 URLs, background processing starts.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddFilesRequest'
+            examples:
+              valid:
+                value:
+                  urls:
+                    - https://example.org/a.pdf
+                    - https://example.org/b.jpeg
+                    - https://example.org/c.pdf
+      responses:
+        '200':
+          description: Updated task state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          description: Bad request (invalid JSON, unsupported extension, too many files, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/tasks/{id}:
+    get:
+      summary: Get task status
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Current task state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/tasks/{id}/archive:
+    get:
+      summary: Download task archive
+      description: Returns the resulting zip file when the task status is "ready".
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Zip archive
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Archive not ready yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                example:
+                  value: { error: "archive not ready" }
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  parameters:
+    TaskId:
+      name: id
+      in: path
+      required: true
+      description: Task identifier (8-char lowercase hex)
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 36
+        example: 4c75a864
+
+  schemas:
+    Status:
+      type: string
+      enum: [created, in_progress, ready, failed]
+
+    FileState:
+      type: string
+      enum: [pending, ok, failed]
+
+    FileRef:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        state:
+          $ref: '#/components/schemas/FileState'
+        error:
+          type: string
+          nullable: true
+        filename:
+          type: string
+      required: [url, state]
+
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 4c75a864
+        status:
+          $ref: '#/components/schemas/Status'
+        created_at:
+          type: string
+          format: date-time
+        title:
+          type: string
+          description: Human-readable task title composed from creation date/time and unique hostnames extracted from URLs
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileRef'
+        archive_url:
+          type: string
+          description: Present once 3 files are attached
+      required: [id, status, created_at, files]
+
+    CreateTaskResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+          example: 4c75a864
+        status:
+          $ref: '#/components/schemas/Status'
+        title:
+          type: string
+          description: Human-readable task title composed from creation date/time; hostnames are added after URLs are attached
+      required: [task_id, status]
+
+    AddFilesRequest:
+      type: object
+      properties:
+        urls:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: string
+            format: uri
+      required: [urls]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+

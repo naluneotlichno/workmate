@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -73,8 +74,11 @@ func (m *Manager) CreateTask() *Task {
 		ID:        newID,
 		Status:    StatusCreated,
 		CreatedAt: time.Now(),
-		Files:     make([]FileRef, 0, maxFilesPerTask),
+		Files:     make([]FileRef, 0, MaxFilesPerTask),
 	}
+
+	// initialize title with timestamp; will be enriched with hostnames as files are added
+	m.updateTaskTitle(newTask)
 
 	m.mu.Lock()
 	m.tasks[newID] = newTask
@@ -107,7 +111,7 @@ func (m *Manager) AddFiles(taskID string, urls []string) (*Task, error) {
 		m.mu.Unlock()
 		return nil, ErrTaskNotFound
 	}
-	if len(currentTask.Files)+len(urls) > maxFilesPerTask {
+	if len(currentTask.Files)+len(urls) > MaxFilesPerTask {
 		m.mu.Unlock()
 		return nil, ErrTooManyFiles
 	}
@@ -121,6 +125,8 @@ func (m *Manager) AddFiles(taskID string, urls []string) (*Task, error) {
 		}
 		currentTask.Files = append(currentTask.Files, FileRef{URL: rawURL, State: FilePending})
 	}
+	// update title to include hostnames from all files
+	m.updateTaskTitle(currentTask)
 	m.mu.Unlock()
 
 	if err := m.persistTask(currentTask); err != nil {
@@ -130,7 +136,7 @@ func (m *Manager) AddFiles(taskID string, urls []string) (*Task, error) {
 
 	// If we reached max files, acquire a processing slot synchronously to
 	// reflect busy state immediately, then start background processing.
-	if len(currentTask.Files) == maxFilesPerTask {
+	if len(currentTask.Files) == MaxFilesPerTask {
 		m.semaphore <- struct{}{}
 		m.workersWG.Add(1)
 		go func() {
@@ -187,4 +193,32 @@ func (m *Manager) persistTask(taskEntity *Task) error {
 	}
 	statusPath := filepath.Join(taskDirectory, "status.json")
 	return fileutil.WriteJSONAtomic(statusPath, taskEntity) //nolint:wrapcheck
+}
+
+// updateTaskTitle recalculates task title from its CreatedAt and the list of file URLs.
+// Format: "YYYY-MM-DD HH:MM — host1, host2, host3". If no hosts yet, only date/time is used.
+func (m *Manager) updateTaskTitle(t *Task) {
+	timestamp := t.CreatedAt.Local().Format("2006-01-02 15:04")
+	// collect unique hostnames in order
+	seen := make(map[string]struct{}, len(t.Files))
+	hosts := make([]string, 0, len(t.Files))
+	for _, f := range t.Files {
+		parsed, err := url.Parse(strings.TrimSpace(f.URL))
+		if err != nil || parsed.Hostname() == "" {
+			continue
+		}
+		host := parsed.Hostname()
+		// normalize trivial www.
+		host = strings.TrimPrefix(host, "www.")
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		hosts = append(hosts, host)
+	}
+	if len(hosts) == 0 {
+		t.Title = timestamp
+		return
+	}
+	t.Title = timestamp + " — " + strings.Join(hosts, ", ")
 }

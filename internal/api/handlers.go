@@ -13,6 +13,7 @@ import (
 type createTaskResponse struct {
 	TaskID string      `json:"task_id"`
 	Status task.Status `json:"status"`
+	Title  string      `json:"title"`
 }
 
 type addFilesRequest struct {
@@ -23,6 +24,7 @@ type taskResponse struct {
 	ID         string         `json:"id"`
 	Status     task.Status    `json:"status"`
 	CreatedAt  string         `json:"created_at"`
+	Title      string         `json:"title"`
 	Files      []task.FileRef `json:"files"`
 	ArchiveURL string         `json:"archive_url,omitempty"`
 }
@@ -57,7 +59,7 @@ func (a *API) CreateTask(c *gin.Context) {
 	}
 	createdTask := a.taskManager.CreateTask()
 	log.Info().Str("task_id", createdTask.ID).Time("created_at", createdTask.CreatedAt).Msg("task created")
-	c.JSON(http.StatusCreated, createTaskResponse{TaskID: createdTask.ID, Status: createdTask.Status})
+	c.JSON(http.StatusCreated, createTaskResponse{TaskID: createdTask.ID, Status: createdTask.Status, Title: createdTask.Title})
 }
 
 // AddFiles attaches up to 3 URLs to the task and triggers processing when full
@@ -118,6 +120,7 @@ func (a *API) toTaskResponse(taskEntity *task.Task, _ *gin.Context) taskResponse
 		ID:        taskEntity.ID,
 		Status:    taskEntity.Status,
 		CreatedAt: taskEntity.CreatedAt.UTC().Format(time.RFC3339),
+		Title:     taskEntity.Title,
 		Files:     taskEntity.Files,
 	}
 	// Return archive link as soon as the task has 3 files, even if still processing.

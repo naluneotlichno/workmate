@@ -22,9 +22,10 @@ up: down gmt lint test build
 	@echo "[run] PID saved to $(PID_FILE): $$(cat "$(PID_FILE)")"
 
 gmt:
-	go mod tidy
+	@go mod tidy
 
 lint: 
+	@go fmt ./...
 	@echo "Start linters..."
 	@golangci-lint run --timeout=10m ./... && echo "All linters have run successfully"
 

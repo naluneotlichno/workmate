@@ -136,6 +136,9 @@ var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}
   {{end}}
   <div class="card">
     <h2>Task <span class="mono">{{.Task.ID}}</span></h2>
+    {{if .Task.Title}}
+    <div>Title: <strong>{{.Task.Title}}</strong></div>
+    {{end}}
     <div>Status: <span class="status">{{.Task.Status}}</span></div>
     <div class="muted">Created at: {{.Task.CreatedAt}}</div>
   </div>
