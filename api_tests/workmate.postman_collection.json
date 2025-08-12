@@ -1,114 +1,144 @@
 {
   "info": {
     "name": "Workmate API",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    "description": "Postman Collection to run Workmate API end-to-end: create task → add files → poll status → download archive. Includes negative cases.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": { "major": 1, "minor": 0, "patch": 0 }
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080" },
-    { "key": "taskId", "value": "" }
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "taskId", "value": "", "type": "string" },
+    { "key": "pollMax", "value": "60", "type": "string" },
+    { "key": "pollCount", "value": "0", "type": "string" }
   ],
   "item": [
     {
-      "name": "Create Task",
+      "name": "Create task",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": { "mode": "raw", "raw": "{}" },
-        "url": { "raw": "{{baseUrl}}/api/v1/tasks" }
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/tasks", "host": [ "{{baseUrl}}" ], "path": ["api","v1","tasks"] },
+        "body": { "mode": "raw", "raw": "{}" }
       },
       "event": [
         {
           "listen": "test",
           "script": {
-            "type": "text/javascript",
             "exec": [
-              "let id = '';",
-              "try { const data = pm.response.json(); id = (data.task_id || data.id || '').toString(); } catch(e) {}",
-              "if (id) { pm.collectionVariables.set('taskId', id); }",
-              "pm.test('Task created (has task_id)', function () { pm.expect(id).to.be.a('string').and.not.empty; });"
-            ]
+              "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+              "var json = {}; try { json = pm.response.json(); } catch(e) {}",
+              "var id = (json.task_id || json.id || '').toString();",
+              "pm.environment.set('taskId', id);",
+              "pm.test('taskId captured', function () { pm.expect(id).to.have.length.of.at.least(1); });",
+              "pm.environment.set('pollCount', '0');"
+            ],
+            "type": "text/javascript"
           }
         }
       ]
     },
     {
-      "name": "Add Files (valid)",
+      "name": "Add files (valid)",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/files", "host": [ "{{baseUrl}}" ], "path": ["api","v1","tasks","{{taskId}}","files"] },
         "body": {
           "mode": "raw",
           "raw": "{\n  \"urls\": [\n    \"https://i.pinimg.com/736x/81/8f/d0/818fd0c7b9b0ebca8c753828bcb0a71b.jpg\",\n    \"https://psv4.userapi.com/s/v1/d2/A2XhIypFjc4NjEOaROKSCZXC9_2HLKIh4pXZL_3WAO6i9OssY_eB0TLPTvmHz6KJry7P8avuqSt1-M_I8hHZJMANGP3HWTsNXWOjNMmsK6vUA9q2ySQ8yyCSFsvNDAM-cq8gnefQFcTa/Rannetriasovye_amfibii_Vostochnoy_Evropy.pdf\",\n    \"https://psv4.userapi.com/s/v1/d2/o_HuRDUxdMzM8saNariRuufcOk_rbiezPUbTrS7aOdg4USCkaOw2oUTQ7Alle6CDRlXUdhOIAdRkHRAMgEfPbB-dcm39D9vZaXckmTvjkX84S9f1bFl_8xOO8Qs0ck2JDNvLV7Mm8BkK/Kak_slushat_muzyku_Max_Bazhenov.pdf\"\n  ]\n}"
-        },
-        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/files" }
-      }
-    },
-    {
-      "name": "Get Task Status",
-      "request": {
-        "method": "GET",
-        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}" }
-      }
-    },
-    {
-      "name": "Download Archive",
-      "request": {
-        "method": "GET",
-        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/archive" }
-      }
-    },
-    {
-      "name": "Test Invalid Extension (expect 400)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"urls\": [\n    \"https://example.com/file.exe\",\n    \"https://example.com/document.txt\"\n  ]\n}"
-        },
-        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/files" }
+        }
       },
       "event": [
         {
           "listen": "test",
           "script": {
-            "type": "text/javascript",
             "exec": [
-              "pm.test('Should be 400 Bad Request', function () { pm.response.to.have.status(400); });"
-            ]
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "var json = {}; try { json = pm.response.json(); } catch(e) {}",
+              "pm.environment.set('archiveUrl', (json.archive_url || ''));"
+            ],
+            "type": "text/javascript"
           }
         }
       ]
     },
     {
-      "name": "Test Too Many Files (expect 400)",
+      "name": "Get task status",
       "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"urls\": [\n    \"https://i.pinimg.com/736x/81/8f/d0/818fd0c7b9b0ebca8c753828bcb0a71b.jpg\",\n    \"https://psv4.userapi.com/s/v1/d2/A2XhIypFjc4NjEOaROKSCZXC9_2HLKIh4pXZL_3WAO6i9OssY_eB0TLPTvmHz6KJry7P8avuqSt1-M_I8hHZJMANGP3HWTsNXWOjNMmsK6vUA9q2ySQ8yyCSFsvNDAM-cq8gnefQFcTa/Rannetriasovye_amfibii_Vostochnoy_Evropy.pdf\",\n    \"https://psv4.userapi.com/s/v1/d2/o_HuRDUxdMzM8saNariRuufcOk_rbiezPUbTrS7aOdg4USCkaOw2oUTQ7Alle6CDRlXUdhOIAdRkHRAMgEfPbB-dcm39D9vZaXckmTvjkX84S9f1bFl_8xOO8Qs0ck2JDNvLV7Mm8BkK/Kak_slushat_muzyku_Max_Bazhenov.pdf\",\n    \"https://i.pinimg.com/550x/d3/8a/5f/d38a5f3c184afc0d71350b8d26d99b65.jpg\"\n  ]\n}"
-        },
-        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/files" }
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}", "host": [ "{{baseUrl}}" ], "path": ["api","v1","tasks","{{taskId}}"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": { "exec": [ "pm.test('Status 200', function () { pm.response.to.have.status(200); });" ], "type": "text/javascript" }
+        }
+      ]
+    },
+    {
+      "name": "Poll until ready",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}", "host": [ "{{baseUrl}}" ], "path": ["api","v1","tasks","{{taskId}}"] }
       },
       "event": [
         {
           "listen": "test",
           "script": {
-            "type": "text/javascript",
             "exec": [
-              "pm.test('Should be 400 Bad Request', function () { pm.response.to.have.status(400); });"
-            ]
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "var json = {}; try { json = pm.response.json(); } catch(e) {}",
+              "var status = (json.status || '').toString();",
+              "var count = parseInt(pm.environment.get('pollCount') || '0', 10);",
+              "var max = parseInt(pm.environment.get('pollMax') || '60', 10);",
+              "if (status !== 'ready' && count < max) {",
+              "  pm.environment.set('pollCount', String(count + 1));",
+              "  postman.setNextRequest('Poll until ready');",
+              "} else {",
+              "  pm.test('Status is ready', function () { pm.expect(status).to.eql('ready'); });",
+              "  pm.environment.set('pollCount', '0');",
+              "}"
+            ],
+            "type": "text/javascript"
           }
         }
+      ]
+    },
+    {
+      "name": "Download archive",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/archive", "host": [ "{{baseUrl}}" ], "path": ["api","v1","tasks","{{taskId}}","archive"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": { "exec": [ "pm.test('Zip download (200)', function () { pm.response.to.have.status(200); });" ], "type": "text/javascript" }
+        }
+      ]
+    },
+    {
+      "name": "Negative: invalid extension (400)",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/files", "host": [ "{{baseUrl}}" ], "path": ["api","v1","tasks","{{taskId}}","files"] },
+        "body": { "mode": "raw", "raw": "{\n  \"urls\": [\n    \"https://example.com/file.exe\",\n    \"https://example.com/document.txt\"\n  ]\n}" }
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [ "pm.test('400', function () { pm.response.to.have.status(400); });" ], "type": "text/javascript" } }
+      ]
+    },
+    {
+      "name": "Negative: too many files (400)",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/files", "host": [ "{{baseUrl}}" ], "path": ["api","v1","tasks","{{taskId}}","files"] },
+        "body": { "mode": "raw", "raw": "{\n  \"urls\": [\n    \"https://i.pinimg.com/736x/81/8f/d0/818fd0c7b9b0ebca8c753828bcb0a71b.jpg\",\n    \"https://psv4.userapi.com/s/v1/d2/A2XhIypFjc4NjEOaROKSCZXC9_2HLKIh4pXZL_3WAO6i9OssY_eB0TLPTvmHz6KJry7P8avuqSt1-M_I8hHZJMANGP3HWTsNXWOjNMmsK6vUA9q2ySQ8yyCSFsvNDAM-cq8gnefQFcTa/Rannetriasovye_amfibii_Vostochnoy_Evropy.pdf\",\n    \"https://psv4.userapi.com/s/v1/d2/o_HuRDUxdMzM8saNariRuufcOk_rbiezPUbTrS7aOdg4USCkaOw2oUTQ7Alle6CDRlXUdhOIAdRkHRAMgEfPbB-dcm39D9vZaXckmTvjkX84S9f1bFl_8xOO8Qs0ck2JDNvLV7Mm8BkK/Kak_slushat_muzyku_Max_Bazhenov.pdf\",\n    \"https://i.pinimg.com/550x/d3/8a/5f/d38a5f3c184afc0d71350b8d26d99b65.jpg\"\n  ]\n}" }
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [ "pm.test('400', function () { pm.response.to.have.status(400); });" ], "type": "text/javascript" } }
       ]
     }
   ]
