@@ -29,7 +29,7 @@ type Manager struct {
 
 func NewManager() *Manager {
 	return NewManagerWithOptions(Options{
-		DataDir:            "bin/data",
+		DataDir:            "storage/data",
 		AllowedExtensions:  []string{".pdf", ".jpeg"},
 		MaxConcurrentTasks: defaultMaxConcurrent,
 	})

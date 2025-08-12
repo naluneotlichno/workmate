@@ -23,7 +23,7 @@ type fileStore struct {
 
 func NewFileStore(dataDir string) TaskStore {
 	if dataDir == "" {
-		dataDir = "bin/data"
+		dataDir = "storage/data"
 	}
 	return &fileStore{dataDir: dataDir}
 }

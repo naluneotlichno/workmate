@@ -33,7 +33,7 @@ func main() {
 	}
 
 	if cfg.DataDir == "data" {
-		cfg.DataDir = "bin/data"
+		cfg.DataDir = "storage/data"
 	}
 
 	if err := fileutil.EnsureDir(cfg.DataDir); err != nil {

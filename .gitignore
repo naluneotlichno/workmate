@@ -1,5 +1,5 @@
 # Build and runtime artifacts
-bin/
+storage/
 data/
 coverage.out
 temp_pid.txt
@@ -25,5 +25,5 @@ desktop.ini
 # Go vendor (not used, but keep ignored if appears)
 vendor/
 
-bin/
+storage/
 

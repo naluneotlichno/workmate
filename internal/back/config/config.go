@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultPort               = 8080
-	defaultDataDir            = "bin/data"
+	defaultDataDir            = "storage/data"
 	defaultMaxConcurrentTasks = 3
 )
 
