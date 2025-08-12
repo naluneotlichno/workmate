@@ -185,7 +185,6 @@ var uiTemplates = template.Must(template.New("layout").Parse(`{{define "layout"}
 {{end}}
 `))
 
-// RegisterUIRoutes registers minimal HTML UI without JS
 func (a *API) RegisterUIRoutes(router *gin.Engine) {
 	router.SetHTMLTemplate(uiTemplates)
 	router.GET("/", a.UIHome)
@@ -195,10 +194,8 @@ func (a *API) RegisterUIRoutes(router *gin.Engine) {
 	router.POST("/ui/tasks/:id/files", a.UIAddFiles)
 }
 
-// UIHome renders the home page
 func (a *API) UIHome(c *gin.Context) { c.HTML(http.StatusOK, "home", gin.H{}) }
 
-// UIOpenExisting redirects to the task page by id
 func (a *API) UIOpenExisting(c *gin.Context) {
 	id := strings.TrimSpace(c.Query("id"))
 	if id == "" {
@@ -208,7 +205,6 @@ func (a *API) UIOpenExisting(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/ui/tasks/"+id)
 }
 
-// UICreateTask creates a task and redirects to its page
 func (a *API) UICreateTask(c *gin.Context) {
 	if a.taskManager.IsBusy() {
 		c.HTML(http.StatusServiceUnavailable, "home", gin.H{"Error": "server busy: try again later"})
@@ -218,19 +214,16 @@ func (a *API) UICreateTask(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/ui/tasks/"+t.ID)
 }
 
-// UITask renders a task page
 func (a *API) UITask(c *gin.Context) {
 	id := c.Param("id")
 	if t, ok := a.taskManager.GetTask(id); ok {
 		c.HTML(http.StatusOK, "task", gin.H{"Task": t, "content": "content-task"})
-		// Above we render template "task" which delegates to layout and uses content-task via the template name
-		// Since gin uses named templates, we call ExecuteTemplate with the name we passed; layout wraps content
+
 		return
 	}
 	c.HTML(http.StatusNotFound, "home", gin.H{"Error": "task not found"})
 }
 
-// UIAddFiles adds URLs from the form and redirects back to task page
 func (a *API) UIAddFiles(c *gin.Context) {
 	id := c.Param("id")
 	urls := c.PostFormArray("urls")
@@ -243,7 +236,7 @@ func (a *API) UIAddFiles(c *gin.Context) {
 	}
 	if len(filtered) > 0 {
 		if _, err := a.taskManager.AddFiles(id, filtered); err != nil {
-			// render task page with error
+
 			if t, ok := a.taskManager.GetTask(id); ok {
 				c.HTML(http.StatusBadRequest, "task", gin.H{"Task": t, "Error": err.Error()})
 				return

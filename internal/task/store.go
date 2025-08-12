@@ -10,8 +10,6 @@ import (
 	fileutil "workmate/internal/file"
 )
 
-// TaskStore abstracts persistence for tasks and archive destination resolution.
-// Default implementation is file-based, but the interface allows plugging a DB-backed store later (e.g., Postgres via pgxpool).
 type TaskStore interface {
 	SaveTask(ctx context.Context, t *Task) error
 	LoadTasks(ctx context.Context) ([]*Task, error)
@@ -19,14 +17,13 @@ type TaskStore interface {
 	ArchivePath(taskID string) string
 }
 
-// fileStore implements TaskStore using the local filesystem under dataDir.
 type fileStore struct {
 	dataDir string
 }
 
-func NewFileStore(dataDir string) TaskStore { //nolint:ireturn
+func NewFileStore(dataDir string) TaskStore {
 	if dataDir == "" {
-		dataDir = "data"
+		dataDir = "bin/data"
 	}
 	return &fileStore{dataDir: dataDir}
 }
@@ -43,7 +40,7 @@ func (s *fileStore) ArchivePath(taskID string) string {
 	return filepath.Join(s.taskDir(taskID), "archive.zip")
 }
 
-func (s *fileStore) EnsureTaskDir(ctx context.Context, taskID string) (string, error) { //nolint:revive,stylecheck // context reserved for future use
+func (s *fileStore) EnsureTaskDir(ctx context.Context, taskID string) (string, error) {
 	dir := s.taskDir(taskID)
 	if err := fileutil.EnsureDir(dir); err != nil {
 		return "", fmt.Errorf("ensure task dir: %w", err)
@@ -51,14 +48,17 @@ func (s *fileStore) EnsureTaskDir(ctx context.Context, taskID string) (string, e
 	return dir, nil
 }
 
-func (s *fileStore) SaveTask(ctx context.Context, t *Task) error { //nolint:revive,stylecheck // context reserved for future use
+func (s *fileStore) SaveTask(ctx context.Context, t *Task) error {
 	if _, err := s.EnsureTaskDir(ctx, t.ID); err != nil {
 		return err
 	}
-	return fileutil.WriteJSONAtomic(s.statusPath(t.ID), t) //nolint:wrapcheck
+	if err := fileutil.WriteJSONAtomic(s.statusPath(t.ID), t); err != nil {
+		return fmt.Errorf("write status: %w", err)
+	}
+	return nil
 }
 
-func (s *fileStore) LoadTasks(ctx context.Context) ([]*Task, error) { //nolint:revive,stylecheck // context reserved for future use
+func (s *fileStore) LoadTasks(ctx context.Context) ([]*Task, error) {
 	root := filepath.Join(s.dataDir, "tasks")
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -72,7 +72,7 @@ func (s *fileStore) LoadTasks(ctx context.Context) ([]*Task, error) { //nolint:r
 		if !e.IsDir() {
 			continue
 		}
-		b, err := os.ReadFile(s.statusPath(e.Name())) //nolint:gosec // path is controlled by application
+		b, err := os.ReadFile(s.statusPath(e.Name()))
 		if err != nil {
 			continue
 		}

@@ -11,11 +11,10 @@ import (
 
 const (
 	defaultPort               = 8080
-	defaultDataDir            = "data"
+	defaultDataDir            = "bin/data"
 	defaultMaxConcurrentTasks = 3
 )
 
-// Config describes runtime configuration for the service.
 type Config struct {
 	Port               int      `yaml:"port"`
 	DataDir            string   `yaml:"data_dir"`
@@ -23,7 +22,6 @@ type Config struct {
 	MaxConcurrentTasks int      `yaml:"max_concurrent_tasks"`
 }
 
-// Default returns sane defaults compliant with TZ.md
 func Default() Config {
 	return Config{
 		Port:               defaultPort,
@@ -33,14 +31,12 @@ func Default() Config {
 	}
 }
 
-// Load reads YAML config from the provided path. If the file does not exist
-// or is empty, defaults are returned with no error.
 func Load(path string) (Config, error) {
 	cfg := Default()
 	if path == "" {
 		return cfg, errors.New("empty config path")
 	}
-	fileData, err := os.ReadFile(path) //nolint:gosec // config path is controlled by deployment
+	fileData, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return cfg, nil
@@ -53,14 +49,14 @@ func Load(path string) (Config, error) {
 	if err := yaml.Unmarshal(fileData, &cfg); err != nil {
 		return cfg, fmt.Errorf("parse yaml: %w", err)
 	}
-	// basic normalization
+
 	if cfg.Port == 0 {
 		cfg.Port = defaultPort
 	}
 	if cfg.DataDir == "" {
 		cfg.DataDir = defaultDataDir
 	}
-	// validate concurrency explicitly: values < 1 are not allowed
+
 	if cfg.MaxConcurrentTasks < 1 {
 		return cfg, fmt.Errorf("invalid max_concurrent_tasks: %d (must be >= 1)", cfg.MaxConcurrentTasks)
 	}

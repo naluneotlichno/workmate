@@ -5,8 +5,6 @@ import (
 	"fmt"
 )
 
-// LoadFromDisk scans data/tasks and loads tasks into memory.
-// If a task has StatusInProgress (from a previous run), it is marked as failed.
 func (m *Manager) LoadFromDisk() error {
 	if m.store == nil {
 		return nil

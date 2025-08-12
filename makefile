@@ -6,7 +6,7 @@ APP_NAME := workmate
 BIN_DIR := bin
 BIN := $(BIN_DIR)/$(APP_NAME).exe
 MAIN := ./cmd/main.go
-PID_FILE := temp_pid.txt
+PID_FILE := $(BIN_DIR)/temp_pid.txt
 TEST_DIRS ?= ./...
 
 

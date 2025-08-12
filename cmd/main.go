@@ -15,11 +15,12 @@ import (
 
 	"workmate/internal/api"
 	"workmate/internal/config"
+	fileutil "workmate/internal/file"
 	"workmate/internal/task"
 )
 
 func main() {
-	// Setup zerolog
+
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
@@ -30,14 +31,20 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to load config")
 	}
 
+	if cfg.DataDir == "data" {
+		cfg.DataDir = "bin/data"
+	}
+
+	if err := fileutil.EnsureDir(cfg.DataDir); err != nil {
+		log.Fatal().Err(err).Str("dir", cfg.DataDir).Msg("ensure data dir")
+	}
+
 	taskManager := buildTaskManager(cfg)
 	wireAPI(router, taskManager)
 
-	// Prepare a shutdown-aware context for long-running ops (downloads)
 	baseCtx, baseCancel := context.WithCancel(context.Background())
 	taskManager.SetBaseContext(baseCtx)
 
-	// Graceful HTTP server
 	const (
 		readHeaderTimeout = 5 * time.Second
 		shutdownTimeout   = 10 * time.Second
@@ -53,14 +60,12 @@ func main() {
 
 	waitForShutdownSignal()
 
-	// Stop accepting new connections and finish in-flight requests
 	gracefulShutdown(srv, baseCancel, taskManager, shutdownTimeout)
 }
 
 func setupRouter() *gin.Engine {
 	r := gin.New()
-	// Build API to register UI template before routes (Gin warns otherwise)
-	// UI template is set during UI route registration
+
 	r.Use(gin.Recovery())
 	r.Use(api.ZerologLogger())
 	return r
@@ -72,14 +77,14 @@ func buildTaskManager(cfg config.Config) *task.Manager {
 		AllowedExtensions:  cfg.AllowedExtensions,
 		MaxConcurrentTasks: cfg.MaxConcurrentTasks,
 	})
-	// best-effort reload from disk
+
 	_ = tm.LoadFromDisk()
 	return tm
 }
 
 func wireAPI(router *gin.Engine, tm *task.Manager) {
 	apiHandler := api.NewAPI(tm)
-	// Register UI first to call SetHTMLTemplate before other routes
+
 	apiHandler.RegisterUIRoutes(router)
 	apiHandler.RegisterRoutes(router)
 }
@@ -105,8 +110,8 @@ func gracefulShutdown(srv *http.Server, cancelBase context.CancelFunc, tm *task.
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Warn().Err(err).Msg("http server shutdown warning")
 	}
-	// Wait for background workers to finish
-	cancelBase() // cancel downloads
+
+	cancelBase()
 	done := tm.WaitAll(ctx)
 	if !done {
 		log.Warn().Msg("background workers did not finish before timeout")

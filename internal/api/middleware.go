@@ -12,7 +12,6 @@ const (
 	statusErrorThreshold = 500
 )
 
-// ZerologLogger is a Gin middleware that logs requests using zerolog.
 func ZerologLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()

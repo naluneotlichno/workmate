@@ -1,9 +1,11 @@
 package api
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +55,6 @@ func TestCreateTask(t *testing.T) {
 func TestAddFilesAndStatus(t *testing.T) {
 	testRouter := setupRouter()
 
-	// create task
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
 	testRouter.ServeHTTP(w, req)
@@ -67,7 +68,6 @@ func TestAddFilesAndStatus(t *testing.T) {
 	}
 	id := resp["task_id"].(string)
 
-	// add only two files (should not start processing yet, but should accept)
 	body := `{"urls":["https://example.org/a.pdf","https://example.org/b.jpeg"]}`
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/tasks/"+id+"/files", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -82,7 +82,7 @@ func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	testRouter := gin.Default()
 	testManager := task.NewManager()
-	// inject fake builder: mark two ok and one failed
+
 	testManager.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
 		results := make([]archive.Result, len(urls))
 		for i := range results {
@@ -96,7 +96,6 @@ func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 	apiHandler := NewAPI(testManager)
 	apiHandler.RegisterRoutes(testRouter)
 
-	// create
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
 	testRouter.ServeHTTP(w, req)
@@ -109,7 +108,6 @@ func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 	}
 	id := resp["task_id"].(string)
 
-	// add three
 	body := `{"urls":["https://e.org/a.pdf","https://e.org/b.jpeg","https://e.org/c.pdf"]}`
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/tasks/"+id+"/files", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -118,7 +116,7 @@ func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	// archive_url must be present immediately after adding 3 files
+
 	var addResp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &addResp); err != nil {
 		t.Fatalf("unmarshal addResp: %v", err)
@@ -127,7 +125,6 @@ func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 		t.Fatalf("expected archive_url to be present when files count is 3")
 	}
 
-	// wait until background processing flips status to ready
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if tsk, ok := testManager.GetTask(id); ok {
@@ -149,7 +146,6 @@ func TestAddThreeFilesTriggersProcessing(t *testing.T) {
 func TestInvalidExtension(t *testing.T) {
 	testRouter := setupRouter()
 
-	// create task
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
 	testRouter.ServeHTTP(w, req)
@@ -160,7 +156,6 @@ func TestInvalidExtension(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	id := resp["task_id"].(string)
 
-	// add one invalid ext
 	body := `{"urls":["https://e.org/a.exe"]}`
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/tasks/"+id+"/files", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -174,7 +169,6 @@ func TestInvalidExtension(t *testing.T) {
 func TestTooManyFiles(t *testing.T) {
 	testRouter := setupRouter()
 
-	// create task
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
 	testRouter.ServeHTTP(w, req)
@@ -185,7 +179,6 @@ func TestTooManyFiles(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	id := resp["task_id"].(string)
 
-	// add 4 urls
 	body := `{"urls":["https://e.org/a.pdf","https://e.org/b.jpeg","https://e.org/c.pdf","https://e.org/d.pdf"]}`
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/tasks/"+id+"/files", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -196,21 +189,49 @@ func TestTooManyFiles(t *testing.T) {
 	}
 }
 
-func TestServerBusyOnCreate(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	testRouter := gin.Default()
-	// prepare manager with 1 slot to make test tight
-	testManager := task.NewManagerWithOptions(task.Options{DataDir: "data", AllowedExtensions: []string{".pdf", ".jpeg"}, MaxConcurrentTasks: 1})
-	// inject a builder that blocks until we release it
-	blocker := make(chan struct{})
-	testManager.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
-		<-blocker
-		return make([]archive.Result, len(urls)), nil
-	})
-	apiHandler := NewAPI(testManager)
-	apiHandler.RegisterRoutes(testRouter)
+func TestGetTaskNotFound(t *testing.T) {
+	testRouter := setupRouter()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tasks/does-not-exist", nil)
+	w := httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
 
-	// create task 1
+func TestGetTaskOK(t *testing.T) {
+	testRouter := setupRouter()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
+	w := httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	id := resp["task_id"].(string)
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+id, nil)
+	w = httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var getResp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &getResp); err != nil {
+		t.Fatalf("unmarshal get: %v", err)
+	}
+	if getResp["id"].(string) != id {
+		t.Fatalf("expected id %s, got %v", id, getResp["id"])
+	}
+}
+
+func TestDownloadArchiveNotReady(t *testing.T) {
+	testRouter := setupRouter()
+
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w := httptest.NewRecorder()
 	testRouter.ServeHTTP(w, req)
@@ -221,7 +242,50 @@ func TestServerBusyOnCreate(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	id := resp["task_id"].(string)
 
-	// fill it with 3 urls to start processing and occupy the only slot
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+id+"/archive", nil)
+	w = httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestDownloadArchiveReady(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	testRouter := gin.Default()
+	testManager := task.NewManager()
+
+	testManager.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
+
+		f, err := os.Create(dest)
+		if err != nil {
+			return nil, err
+		}
+		zw := zip.NewWriter(f)
+		_, _ = zw.Create("ok.txt")
+		_ = zw.Close()
+		_ = f.Close()
+		results := make([]archive.Result, len(urls))
+		for i := range results {
+			results[i].Filename = "f.pdf"
+		}
+		return results, nil
+	})
+	apiHandler := NewAPI(testManager)
+	apiHandler.RegisterRoutes(testRouter)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
+	w := httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	id := resp["task_id"].(string)
+
 	body := `{"urls":["https://e.org/a.pdf","https://e.org/b.jpeg","https://e.org/c.pdf"]}`
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/tasks/"+id+"/files", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -231,7 +295,60 @@ func TestServerBusyOnCreate(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	// try to create second task while first is running (1 slot total) => busy
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if tsk, ok := testManager.GetTask(id); ok {
+			if tsk.Status == task.StatusReady {
+				break
+			}
+			if tsk.Status == task.StatusFailed {
+				t.Fatalf("unexpected failed status")
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/tasks/"+id+"/archive", nil)
+	w = httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServerBusyOnCreate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	testRouter := gin.Default()
+
+	testManager := task.NewManagerWithOptions(task.Options{DataDir: "data", AllowedExtensions: []string{".pdf", ".jpeg"}, MaxConcurrentTasks: 1})
+
+	blocker := make(chan struct{})
+	testManager.UseArchiveBuilder(func(ctx context.Context, dest string, urls []string) ([]archive.Result, error) {
+		<-blocker
+		return make([]archive.Result, len(urls)), nil
+	})
+	apiHandler := NewAPI(testManager)
+	apiHandler.RegisterRoutes(testRouter)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
+	w := httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	id := resp["task_id"].(string)
+
+	body := `{"urls":["https://e.org/a.pdf","https://e.org/b.jpeg","https://e.org/c.pdf"]}`
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/tasks/"+id+"/files", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	testRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/tasks", nil)
 	w = httptest.NewRecorder()
 	testRouter.ServeHTTP(w, req)
@@ -239,6 +356,5 @@ func TestServerBusyOnCreate(t *testing.T) {
 		t.Fatalf("expected 503, got %d", w.Code)
 	}
 
-	// unblock and let goroutine finish
 	close(blocker)
 }

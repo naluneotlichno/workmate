@@ -16,15 +16,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Result describes outcome of downloading a single URL and writing it into the zip
 type Result struct {
 	Filename string
 	Err      string
 }
 
-// BuildArchive downloads provided URLs and writes them as files into a zip at destZipPath.
-// It always returns a results slice of the same length as urls. On total failure, Err describes the reason.
-// For failed individual URLs, the corresponding Result.Err is set and the file is omitted from the archive.
 const (
 	defaultHTTPTimeout             = 20 * time.Second
 	archiveDirPerm     os.FileMode = 0o750
@@ -36,7 +32,6 @@ const (
 	ctxKeyHTTPTimeout ctxKey = iota
 )
 
-// WithHTTPTimeout returns a child context that carries the HTTP client timeout
 func WithHTTPTimeout(parent context.Context, timeout time.Duration) context.Context {
 	return context.WithValue(parent, ctxKeyHTTPTimeout, timeout)
 }
@@ -61,18 +56,17 @@ func BuildArchive(ctx context.Context, destZipPath string, urls []string) ([]Res
 	defer func() { _ = zipWriter.Close() }()
 	defer func() { _ = zipFile.Close() }()
 
-	// HTTP client with timeout
 	client := &http.Client{Timeout: httpTimeoutFromContext(ctx)}
 
 	results := make([]Result, len(urls))
 	usedNames := make(map[string]int, len(urls))
 	for i, rawURL := range urls {
 		res := processURL(ctx, client, zipWriter, rawURL, i)
-		// Ensure unique filenames inside zip
+
 		if res.Filename != "" {
 			base := res.Filename
 			if count, ok := usedNames[base]; ok {
-				// increment and suffix
+
 				count++
 				usedNames[base] = count
 				ext := filepath.Ext(base)
@@ -96,9 +90,8 @@ func BuildArchive(ctx context.Context, destZipPath string, urls []string) ([]Res
 	return results, nil
 }
 
-// prepareZip creates destination file and a zip writer for it.
 func prepareZip(destZipPath string) (io.WriteCloser, *zip.Writer, error) {
-	// We write directly; if needed, upper layer can make it atomic by writing to temp and renaming.
+
 	zipFile, err := createFile(destZipPath)
 	if err != nil {
 		return nil, nil, err
@@ -107,16 +100,15 @@ func prepareZip(destZipPath string) (io.WriteCloser, *zip.Writer, error) {
 	return zipFile, zipWriter, nil
 }
 
-// processURL downloads a single URL and writes it into the zip, returning the Result.
 func processURL(ctx context.Context, client *http.Client, zipWriter *zip.Writer, rawURL string, index int) Result {
 	url := strings.TrimSpace(rawURL)
 	filename := deriveFilename(url, index)
 	result := Result{Filename: filename}
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	// Set browser-like User-Agent to avoid blocking by some sites
+
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-	// Some sites check Referer, so we set it to avoid blocking
+
 	req.Header.Set("Referer", "https://www.google.com/")
 	httpResponse, err := client.Do(req)
 	if err != nil {
@@ -124,7 +116,7 @@ func processURL(ctx context.Context, client *http.Client, zipWriter *zip.Writer,
 		log.Warn().Str("url", url).Err(err).Msg("http request failed")
 		return result
 	}
-	// ensure body closed in all branches with explicit closes matching original behavior
+
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
 		if httpResponse.Body != nil {
 			_ = httpResponse.Body.Close()
@@ -155,7 +147,6 @@ func processURL(ctx context.Context, client *http.Client, zipWriter *zip.Writer,
 	return result
 }
 
-// deriveFilename extracts a safe filename from URL or falls back to index-based naming
 func deriveFilename(rawURL string, index int) string {
 	trimmed := strings.TrimSpace(rawURL)
 	if trimmed == "" {
@@ -168,16 +159,14 @@ func deriveFilename(rawURL string, index int) string {
 	return base
 }
 
-// createFile is a small abstraction to enable swapping in atomic writers later if desired
 func createFile(destinationPath string) (io.WriteCloser, error) { return openOSFile(destinationPath) }
 
-// openOSFile creates or truncates the destination file along with ensuring parent dir exists
 func openOSFile(destinationPath string) (io.WriteCloser, error) {
-	if err := os.MkdirAll(filepath.Dir(destinationPath), archiveDirPerm); err != nil { //nolint:gosec // directory created by application under controlled path
+	if err := os.MkdirAll(filepath.Dir(destinationPath), archiveDirPerm); err != nil {
 		return nil, fmt.Errorf("ensure dir: %w", err)
 	}
-	// os.Create truncates existing file or creates a new one
-	outputFile, err := os.Create(destinationPath) //nolint:gosec // path is constructed by the application
+
+	outputFile, err := os.Create(destinationPath)
 	if err != nil {
 		return nil, fmt.Errorf("create file: %w", err)
 	}

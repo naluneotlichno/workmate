@@ -10,8 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// startProcessing attempts to start processing. If slotAlreadyAcquired is false,
-// the function acquires a slot and releases it on return.
 func (m *Manager) startProcessing(taskID string, slotAlreadyAcquired bool) {
 	if !slotAlreadyAcquired {
 		m.semaphore <- struct{}{}
@@ -30,7 +28,6 @@ func (m *Manager) startProcessing(taskID string, slotAlreadyAcquired bool) {
 		log.Warn().Str("task_id", taskToProcess.ID).Err(err).Msg("persist in_progress failed")
 	}
 
-	// Prepare paths
 	taskDirectory := filepath.Join(m.dataDir, "tasks", taskToProcess.ID)
 	if err := fileutil.EnsureDir(taskDirectory); err != nil {
 		m.failTask(taskToProcess, "failed to create task dir: "+err.Error())
@@ -38,7 +35,6 @@ func (m *Manager) startProcessing(taskID string, slotAlreadyAcquired bool) {
 	}
 	destinationZipPath := filepath.Join(taskDirectory, "archive.zip")
 
-	// Collect URLs
 	urlsToProcess := make([]string, 0, len(taskToProcess.Files))
 	for _, fileRef := range taskToProcess.Files {
 		urlsToProcess = append(urlsToProcess, fileRef.URL)
@@ -48,7 +44,7 @@ func (m *Manager) startProcessing(taskID string, slotAlreadyAcquired bool) {
 	if builder == nil {
 		builder = archive.BuildArchive
 	}
-	// allow cancellation on graceful shutdown by using background here
+
 	processingContext := m.baseCtx
 	if processingContext == nil {
 		processingContext = context.Background()
@@ -59,7 +55,6 @@ func (m *Manager) startProcessing(taskID string, slotAlreadyAcquired bool) {
 		return
 	}
 
-	// Update file states
 	m.mu.Lock()
 	for i := range taskToProcess.Files {
 		archiveResult := archiveResults[i]
@@ -72,7 +67,6 @@ func (m *Manager) startProcessing(taskID string, slotAlreadyAcquired bool) {
 		}
 	}
 
-	// Determine overall status
 	anyFilesOK := false
 	for _, fileResult := range taskToProcess.Files {
 		if fileResult.State == FileOK {
@@ -95,7 +89,7 @@ func (m *Manager) startProcessing(taskID string, slotAlreadyAcquired bool) {
 func (m *Manager) failTask(taskEntity *Task, msg string) {
 	m.mu.Lock()
 	taskEntity.Status = StatusFailed
-	// propagate error to pending files
+
 	for i := range taskEntity.Files {
 		if taskEntity.Files[i].State == FilePending {
 			taskEntity.Files[i].State = FileFailed

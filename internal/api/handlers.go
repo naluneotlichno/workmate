@@ -39,7 +39,6 @@ func NewAPI(taskManager *task.Manager) *API {
 	return &API{taskManager: taskManager}
 }
 
-// RegisterRoutes registers API routes on the provided gin engine
 func (a *API) RegisterRoutes(router *gin.Engine) {
 	api := router.Group("/api/v1")
 	{
@@ -50,7 +49,6 @@ func (a *API) RegisterRoutes(router *gin.Engine) {
 	}
 }
 
-// CreateTask handles creation of a new task
 func (a *API) CreateTask(c *gin.Context) {
 	if a.taskManager.IsBusy() {
 		log.Warn().Msg("rejecting task creation: server is at max concurrency")
@@ -62,7 +60,6 @@ func (a *API) CreateTask(c *gin.Context) {
 	c.JSON(http.StatusCreated, createTaskResponse{TaskID: createdTask.ID, Status: createdTask.Status, Title: createdTask.Title})
 }
 
-// AddFiles attaches up to 3 URLs to the task and triggers processing when full
 func (a *API) AddFiles(c *gin.Context) {
 	id := c.Param("id")
 	var req addFilesRequest
@@ -86,7 +83,6 @@ func (a *API) AddFiles(c *gin.Context) {
 	c.JSON(http.StatusOK, a.toTaskResponse(currentTask, c))
 }
 
-// GetTask returns task status
 func (a *API) GetTask(c *gin.Context) {
 	id := c.Param("id")
 	if foundTask, ok := a.taskManager.GetTask(id); ok {
@@ -97,7 +93,6 @@ func (a *API) GetTask(c *gin.Context) {
 	c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
 }
 
-// DownloadArchive serves the archive file when ready
 func (a *API) DownloadArchive(c *gin.Context) {
 	id := c.Param("id")
 	foundTask, ok := a.taskManager.GetTask(id)
@@ -123,8 +118,7 @@ func (a *API) toTaskResponse(taskEntity *task.Task, _ *gin.Context) taskResponse
 		Title:     taskEntity.Title,
 		Files:     taskEntity.Files,
 	}
-	// Return archive link as soon as the task has 3 files, even if still processing.
-	// The link will become downloadable once status becomes ready.
+
 	if len(taskEntity.Files) >= archiveURLFilesThreshold {
 		resp.ArchiveURL = "/api/v1/tasks/" + taskEntity.ID + "/archive"
 	}

@@ -1,5 +1,5 @@
 port: 8080
-data_dir: data
+data_dir: bin/data
 allowed_extensions:
   - .pdf
   - .jpeg
