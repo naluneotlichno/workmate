@@ -25,7 +25,5 @@ desktop.ini
 # Go vendor (not used, but keep ignored if appears)
 vendor/
 
-data
-
-bin
+bin/
 
